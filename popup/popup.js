@@ -272,3 +272,107 @@ function filterNonFollowers(searchTerm) {
   );
   renderNonFollowersList(filtered);
 }
+
+// ─── Export Modal Logic ────────────────────────────────────────────────────
+
+function openExportModal() {
+  if (currentNonFollowers.length === 0) return;
+
+  const overlay = document.getElementById('export-modal-overlay');
+  const previewEl = document.getElementById('export-preview');
+  const countEl = document.getElementById('export-count');
+
+  // Update count
+  countEl.textContent = `${currentNonFollowers.length} user${currentNonFollowers.length !== 1 ? 's' : ''}`;
+
+  // Build preview text (first 20 usernames shown, rest indicated)
+  const previewLines = currentNonFollowers.slice(0, 20).map(u => `@${u.username}`);
+  if (currentNonFollowers.length > 20) {
+    previewLines.push(`... and ${currentNonFollowers.length - 20} more`);
+  }
+  previewEl.textContent = previewLines.join('\n');
+
+  overlay.classList.remove('hidden');
+}
+
+function closeExportModal() {
+  document.getElementById('export-modal-overlay').classList.add('hidden');
+}
+
+function getExportText() {
+  const lines = [
+    '# Instagram Non-Followers Report',
+    `# Generated: ${new Date().toLocaleString()}`,
+    `# Total: ${currentNonFollowers.length} users not following back`,
+    '',
+    ...currentNonFollowers.map(u => `@${u.username}`)
+  ];
+  return lines.join('\n');
+}
+
+function getExportCSV() {
+  const header = 'username,user_id,status';
+  const rows = currentNonFollowers.map(u => `${u.username},${u.id || ''},not following back`);
+  return [header, ...rows].join('\n');
+}
+
+function triggerDownload(content, filename, mimeType) {
+  const blob = new Blob([content], { type: mimeType });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(() => {
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }, 100);
+}
+
+// Wire up export button
+document.addEventListener('DOMContentLoaded', () => {
+  document.getElementById('export-btn').addEventListener('click', openExportModal);
+
+  document.getElementById('export-modal-close').addEventListener('click', closeExportModal);
+
+  // Close on overlay backdrop click
+  document.getElementById('export-modal-overlay').addEventListener('click', (e) => {
+    if (e.target === document.getElementById('export-modal-overlay')) {
+      closeExportModal();
+    }
+  });
+
+  // Copy to clipboard
+  document.getElementById('copy-btn').addEventListener('click', async () => {
+    const btn = document.getElementById('copy-btn');
+    try {
+      await navigator.clipboard.writeText(getExportText());
+      btn.classList.add('copied');
+      const original = btn.innerHTML;
+      btn.innerHTML = `
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M20 6L9 17L4 12" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+        Copied!`;
+      setTimeout(() => {
+        btn.classList.remove('copied');
+        btn.innerHTML = original;
+      }, 2000);
+    } catch {
+      alert('Could not copy to clipboard. Please try again.');
+    }
+  });
+
+  // Download TXT
+  document.getElementById('download-txt-btn').addEventListener('click', () => {
+    const date = new Date().toISOString().slice(0, 10);
+    triggerDownload(getExportText(), `non-followers-${date}.txt`, 'text/plain;charset=utf-8');
+  });
+
+  // Download CSV
+  document.getElementById('download-csv-btn').addEventListener('click', () => {
+    const date = new Date().toISOString().slice(0, 10);
+    triggerDownload(getExportCSV(), `non-followers-${date}.csv`, 'text/csv;charset=utf-8');
+  });
+});
